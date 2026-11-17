@@ -1,0 +1,8 @@
+{
+  "layers": [
+    { "id": "ostan",    "name": "استان‌ها",              "file": "data/layers/ostan.geojson",            "cat": "province",    "nameProp": "Name", "color": "#ff6600", "weight": 2.6, "fill": 0.02, "labelZoom": 6 },
+    { "id": "shahrestan","name": "شهرستان‌ها",           "file": "data/layers/shahrestan.geojson",       "cat": "county",      "nameProp": "name", "strip": "شهرستان", "color": "#c2185b", "weight": 2.2, "fill": 0.02, "labelZoom": 9 },
+    { "id": "bakhsh",   "name": "بخش‌ها",                "file": "data/layers/bakhsh.geojson",           "cat": "bakhsh",      "nameProp": "name", "strip": "بخش", "color": "#2277ff", "weight": 1.8, "fill": 0.02, "labelZoom": 11 },
+    { "id": "mantaghe", "name": "مناطق شهرداری مشهد",    "file": "data/layers/mashhad_mantaghe.geojson", "cat": "muni_region", "nameProp": "name", "color": "#ff2222", "weight": 3, "fill": 0.04, "labelZoom": 11 }
+  ]
+}
