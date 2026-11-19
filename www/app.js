@@ -71,26 +71,35 @@ function updateCrosshair() { $('#crosshair').style.display = optCross.checked ? 
 optCross.addEventListener('change', () => { store.set('crosshair', optCross.checked); updateCrosshair(); });
 FM.onBaseChange = () => { updateModeChip(); renderBaseList(); };
 
-/* تنظیمات و کلیدها */
+/* تنظیمات (نمایش و فونت) */
+const FONTS = [['Vazirmatn, Tahoma, sans-serif', 'وزیرمتن'], ['Tahoma, sans-serif', 'تاهوما'], ['system-ui, sans-serif', 'فونت سیستم']];
+const DISPLAY_DEF = { font: FONTS[0][0], scale: 1, labelPx: 11, compass: true };
+const display = () => Object.assign({}, DISPLAY_DEF, store.get('display', {}));
+function applyDisplay() {
+  const s = display();
+  document.body.style.fontFamily = s.font;
+  document.documentElement.style.fontSize = (16 * s.scale) + 'px';
+  $('#compass').style.display = s.compass ? '' : 'none';
+  let st = document.getElementById('fm-display-css');
+  if (!st) { st = document.createElement('style'); st.id = 'fm-display-css'; document.head.appendChild(st); }
+  st.textContent = '.ref-label span,.seg-label span{font-size:' + s.labelPx + 'px !important}';
+}
 async function settingsDialog() {
-  const fld = (label, key, type, ph, hint) => {
-    const i = type === 'ta' ? el('textarea', { class: 'field', rows: 3, dir: 'ltr', placeholder: ph }) : el('input', { type: 'text', class: 'field', dir: 'ltr', placeholder: ph });
-    i.value = store.hasOwn(key) ? store.get(key, '') : ''; if (window.FM_DEFAULTS && window.FM_DEFAULTS[key] && !store.hasOwn(key)) i.placeholder = 'مقدار پیش‌فرض داخل برنامه فعال است (برای تغییر اینجا بنویسید)'; return { i, key, node: el('div', { class: 'frow col' }, [el('label', { text: label }), i].concat(hint ? [el('small', { class: 'hint', text: hint })] : [])) };
-  };
-  const fs = [
-    fld('کلید API نشان (مسیریابی و نقشه‌ی نشان)', 'neshanKey', 'in', 'service.…', 'پیش‌فرض: کلید داخل برنامه. اگر کلید جدیدی دارید اینجا بنویسید.'),
-    fld('توکن پارسل مشهد (websdi.mashhad.ir)', 'mashhadToken', 'ta', 'eyJ0eXAi…', 'پیش‌فرض: توکن داخل برنامه؛ نیازی به وارد کردن نیست.'),
-    fld('کلید Google Maps Platform (اختیاری)', 'googleKey', 'in', 'AIza…', 'فقط اگر بخواهید مسیریابی گوگل هم در فهرست منابع باشد.'),
-    fld('کوکی ورود سحاک (اختیاری، فقط برای نمایش لایه‌های سحاک)', 'sahakCookie', 'ta', 'cookiesession1=…; auth=…', 'برای تشخیص خودکار استان و ناحیه‌ی ثبتی لازم نیست؛ آن‌ها داخل برنامه تشخیص داده می‌شوند.')
-  ];
-  const body = el('div', {}, fs.map((f) => f.node));
-  body.appendChild(el('p', { class: 'hint', text: 'این مقادیر فقط روی همین گوشی ذخیره می‌شوند و داخل برنامه یا پروژه‌ی GitHub نیستند.' }));
-  const r = await dialog({ title: 'تنظیمات و کلیدها', body, focus: false, buttons: [{ label: 'انصراف', value: false }, { label: 'ذخیره', primary: true, value: true }] });
+  const s = display();
+  const font = el('select', { class: 'field' }, FONTS.map(([v, t]) => el('option', { value: v, text: t }))); font.value = s.font;
+  const scale = el('input', { type: 'range', min: '0.85', max: '1.35', step: '0.05' }); scale.value = String(s.scale);
+  const lab = el('input', { type: 'range', min: '9', max: '18', step: '1' }); lab.value = String(s.labelPx);
+  const cmp = el('input', { type: 'checkbox' }); cmp.checked = !!s.compass;
+  const row = (t, n) => el('div', { class: 'frow col' }, [el('label', { text: t }), n]);
+  const body = el('div', {}, [row('فونت برنامه', font), row('اندازه‌ی نوشته‌ها', scale), row('اندازه‌ی برچسب‌های نقشه', lab), el('label', { class: 'chk' }, [cmp, el('span', { text: ' نمایش قطب‌نما' })])]);
+  const r = await dialog({ title: 'تنظیمات', body, focus: false, buttons: [{ label: 'انصراف', value: false }, { label: 'ذخیره', primary: true, value: true }] });
   if (!r) return;
-  fs.forEach((f) => store.set(f.key, f.i.value.trim()));
-  toast('تنظیمات ذخیره شد.'); FM.vec.renderRefList();
+  store.set('display', { font: font.value, scale: +scale.value, labelPx: +lab.value, compass: cmp.checked });
+  applyDisplay(); toast('تنظیمات ذخیره شد.');
 }
 $('#open-settings').addEventListener('click', settingsDialog);
+
+
 
 /* ───────────── مختصات: یکی از دو فرمت به انتخاب کاربر ───────────── */
 let lastCopy = '';
@@ -388,6 +397,7 @@ $('#geo-refresh').addEventListener('click', async () => {
 if (!FM.tiles.setBase(map, store.get('base', 'gsat'))) FM.tiles.setBase(map, 'gsat');
 FM.tiles.restoreOverlays(map);
 decorateSheets(); FM.applyIcons();
+applyDisplay();
 renderBaseList(); renderOverlayList(); updateCrosshair(); updateModeChip(); applyFmt(); refreshSymbolPreview(); syncTrafficFab();
 renderHeading(); setDrawMode(null);
 FM.route.init(map);
