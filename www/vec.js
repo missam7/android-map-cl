@@ -178,10 +178,10 @@ function buildWfsLayer(fc, def) {
   const group = L.layerGroup(), labels = L.layerGroup();
   const gj = L.geoJSON(fc, {
     renderer: wfsRenderer(),
+    interactive: false,
     style: { color: def.color, weight: def.weight, opacity: 0.95, fillColor: def.color, fillOpacity: def.fill },
-    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5, color: '#fff', weight: 1.5, fillColor: def.color, fillOpacity: 1 }),
+    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5,interactive: false, color: '#fff', weight: 1.5, fillColor: def.color, fillOpacity: 1 }),
     onEachFeature(f, ly) {
-      ly.bindPopup(() => wfsPopup(f, def), { maxWidth: 300 });
       const nm = pickNameAny(f.properties || {});
       if (nm && ly.getBounds) { const b = ly.getBounds(); if (b.isValid()) labels.addLayer(L.marker(b.getCenter(), { interactive: false, keyboard: false, icon: L.divIcon({ className: 'ref-label', html: `<span style="color:${esc(def.color)}">${esc(nm)}</span>`, iconSize: [0, 0] }) })); }
     }
