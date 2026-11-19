@@ -5,6 +5,7 @@ const FM = root.FM, { $, nf, toast, fmtLen, fmtDur, haversine, bearing, store, e
 const RAD = Math.PI / 180;
 let map = null, origin = null, dest = null, routes = [], sel = 0, selManual = false, nav = null;
 const group = L.layerGroup(), marks = {};
+const K = (n) => store.get(n, '') || (root.FM_DEFAULTS && root.FM_DEFAULTS[n]) || '';
 
 /* ───────────── شبکه ───────────── */
 async function httpJson(url, headers) {
@@ -109,7 +110,7 @@ function parseOsrm(j) {
   });
 }
 async function fetchGoogle(o, d) {
-  const key = store.get('googleKey', ''); if (!key) throw new Error('کلید Google Maps Platform وارد نشده است.');
+  const key = K('googleKey') ; if (!key) throw new Error('کلید Google Maps Platform وارد نشده است.');
   const Http = root.Lib && root.Lib.Http; if (!Http) throw new Error('لایه‌ی شبکه‌ی بومی در دسترس نیست.');
   const ll = (p) => ({ location: { latLng: { latitude: p.lat, longitude: p.lng } } });
   const mask = 'routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps.distanceMeters,routes.legs.steps.polyline.encodedPolyline,routes.legs.steps.startLocation,routes.legs.steps.navigationInstruction';
@@ -119,7 +120,7 @@ async function fetchGoogle(o, d) {
   const rs = parseGoogle(j || {}); if (!rs.length) throw new Error('گوگل مسیری برنگرداند.'); return rs;
 }
 async function fetchNeshan(o, d) {
-  const key = store.get('neshanKey', ''); if (!key) throw new Error('کلید نشان وارد نشده است.');
+  const key = K('neshanKey'); if (!key) throw new Error('کلید نشان وارد نشده است.');
   const mode = store.get('travelMode', 'car'); if (mode === 'foot') throw new Error('مسیر پیاده با نشان پشتیبانی نمی‌شود');
   const j = await httpJson(`https://api.neshan.org/v4/direction?type=${mode === 'moto' ? 'motorcycle' : 'car'}&origin=${o.lat},${o.lng}&destination=${d.lat},${d.lng}&alternative=true`, { 'Api-Key': key });
   if (j && j.status && j.status !== 'Ok' && !j.routes) throw new Error('پاسخ نشان: ' + (j.message || j.status));
@@ -133,7 +134,7 @@ function directRoute(o, d) {
   const dist = haversine(o, d);
   return [{ coords: [[o.lat, o.lng], [d.lat, d.lng]], distance: dist, duration: dist / 1.3, steps: [{ text: 'مستقیم به سمت مقصد بروید', dist, loc: [o.lat, o.lng], type: 'depart' }, { text: 'به مقصد رسیدید', dist: 0, loc: [d.lat, d.lng], type: 'arrive' }], provider: 'direct' }];
 }
-const NAMES_FA = { neshan: 'نشان', google: 'گوگل', own: 'موتور داخلی', osrm: 'OSRM' };
+const NAMES_FA = { neshan: 'هوشمند', google: 'هوشمند', own: 'هوشمند', osrm: 'هوشمند' };
 // ترافیک گوگل برای یک مستطیل (پیش از موتور داخلی تا وزن یال‌ها را عوض کند)
 async function trafficBox(o, d, onStatus) {
   if (!FM.traffic || !navigator.onLine) return false;
@@ -146,8 +147,8 @@ async function trafficAlong(list) {
 }
 async function compute(o, d, engine, onStatus) {
   const say = onStatus || (() => {}), tried = [];
-  const hasN = !!store.get('neshanKey', ''), hasG = !!store.get('googleKey', '');
-  const order = engine === 'auto' ? [hasN ? 'neshan' : null, hasG ? 'google' : null, 'own', 'osrm', 'direct'].filter(Boolean) : [engine, 'direct'].filter((v, i, a) => a.indexOf(v) === i);
+  const hasN = !!K('neshanKey'), hasG = !!K('googleKey');
+  const order = engine !== 'direct' ? [hasN ? 'neshan' : null, hasG ? 'google' : null, 'own', 'osrm', 'direct'].filter(Boolean) : ['direct'];
   let boxP = null, res = null, used = 'direct';
   for (const e of order) {
     try {
@@ -208,7 +209,7 @@ function badgesOf() {
   const score = (r) => r.est * (1 + 0.6 * (r.jamShare || 0)), rec = routes.reduce((a, b) => (score(b) < score(a) ? b : a));
   return { fast, short, rec };
 }
-const ENGINE_FA = { neshan: 'نشان', google: 'گوگل', own: 'موتور داخلی', osrm: 'OSRM', direct: 'خط مستقیم' };
+const ENGINE_FA = { neshan: 'هوشمند', google: 'هوشمند', own: 'هوشمند', osrm: 'هوشمند', direct: 'خط مستقیم' };
 function trafficBar(r) {
   if (!r.score || !r.score.segments.length) return '';
   const tot = r.score.segments.reduce((a, s) => a + s.len, 0) || 1;
@@ -335,7 +336,8 @@ function init(m) {
   $('#r-traffic').addEventListener('click', () => { const on = FM.tiles.toggleTraffic(map); $('#r-traffic').classList.toggle('on', on); toast(on ? 'نقشه‌ی ترافیک گوگل روشن شد.' : 'به نقشه‌ی قبلی برگشت.'); if (FM.refreshBaseList) FM.refreshBaseList(); });
   $('#r-start').addEventListener('click', startNav);
   $('#nav-stop').addEventListener('click', () => stopNav(false));
-  $('#r-engine').value = store.get('engine', 'auto'); $('#r-engine').addEventListener('change', () => store.set('engine', $('#r-engine').value));
+  $('#r-engine').value = store.get('engine', 'smart') === 'direct' ? 'direct' : 'smart';
+  $('#r-engine').addEventListener('change', () => store.set('engine', $('#r-engine').value));
   $('#r-offline').addEventListener('click', async () => {
     const b = $('#r-offline'); b.disabled = true;
     try { const n = await FM.engine.downloadArea(map.getBounds(), (i, t) => { b.textContent = `در حال دانلود جاده‌ها… ${nf(i)} از ${nf(t)}`; }); toast(`جاده‌های ${nf(n)} بلوک روی گوشی ذخیره شد؛ مسیریابی این محدوده بدون اینترنت هم کار می‌کند.`, 5000); }
