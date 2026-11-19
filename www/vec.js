@@ -161,7 +161,7 @@ const wfsRenderer = () => (wfsRenderer.r = wfsRenderer.r || L.canvas({ padding: 
 function wfsPopup(f, def) {
   const p = f.properties || {}, w = el('div', { class: 'pop' });
   w.appendChild(el('div', { class: 'pop-title', text: pickNameAny(p) || '(بدون نام)' })); w.appendChild(el('div', { class: 'pop-sub', text: def.name }));
-  w.appendChild(propsTable(p));
+  w.appendChild(propsTable(p, 40));
   const btns = el('div', { class: 'pop-btns' });
   btns.appendChild(el('button', { type: 'button', text: 'افزودن به پروژه', onclick: () => {
     const props = Object.assign({}, flat(p), { name: pickNameAny(p) || def.name, source: def.name, stroke: def.color, fill: def.color, 'fill-opacity': 0.08 });
