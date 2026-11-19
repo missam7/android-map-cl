@@ -358,9 +358,18 @@ $('#f-info').addEventListener('click', () => {
   const add = (label, fn) => btns.appendChild(el('button', { type: 'button', text: label, onclick: fn }));
   add('ثبت نقطه', async () => { map.closePopup(); await savePointAt(c); });
   add('مبدا', () => { FM.route.setOrigin(c); map.closePopup(); }); add('مقصد', () => { FM.route.setDest(c); map.closePopup(); });
-  if (FM.vec.parcelMode()) add('پارسل', () => { map.closePopup(); FM.vec.parcelClick(c); });
+  add('پلاک / کد نوسازی', () => { map.closePopup(); FM.vec.parcelClick(c); });
   add('کپی', async () => { try { await navigator.clipboard.writeText(f.copy + (d.text ? '\n' + d.text : '')); toast('کپی شد.'); } catch (e) { toast('کپی انجام نشد.'); } });
-  w.appendChild(btns); L.popup({ maxWidth: 300 }).setLatLng(c).setContent(w).openOn(map);
+   const near = el('div', { class: 'pop-desc', text: 'در حال یافتن کاربری‌های اطراف…' });
+  w.appendChild(near); w.appendChild(btns);
+  const pop = L.popup({ maxWidth: 300 }).setLatLng(c).setContent(w).openOn(map);
+  if (FM.places) FM.places.around(c.lat, c.lng, 80).then((list) => {
+    near.textContent = '';
+    if (!list.length) { near.textContent = 'کاربری ثبت‌شده‌ای در شعاع ۸۰ متری پیدا نشد.'; pop.update(); return; }
+    near.appendChild(el('b', { text: 'کاربری‌های اطراف:' }));
+    list.slice(0, 8).forEach((p) => near.appendChild(el('div', { text: '• ' + p.name + (p.kind ? ' (' + p.kind + ')' : '') })));
+    pop.update();
+  }).catch(() => { near.textContent = 'دریافت کاربری‌ها ممکن نشد (اینترنت یا VPN را بررسی کنید).'; pop.update(); });
 });
 
 /* ───────────── مرزهای اداری: وضعیت و افزودن فایل ───────────── */
