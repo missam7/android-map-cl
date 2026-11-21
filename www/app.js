@@ -26,7 +26,6 @@ let lastLongPress = 0;
 map.on('click', (e) => {
   if (Date.now() - lastLongPress < 800) return;
   if (FM.isDrawingShape()) { addVertex(e.latlng); return; }
-  if (FM.weather && FM.weather.on()) { FM.weather.show(e.latlng); return; }
   if (FM.vec.parcelMode()) { FM.vec.parcelClick(e.latlng); return; }   // حالت «نقطه» از لمس نقشه استفاده نمی‌کند، پس مانع انتخاب پارسل نیست
   if (!draw.mode) closeSheets();
 });
