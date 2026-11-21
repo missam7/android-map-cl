@@ -77,12 +77,18 @@ async function parcelSearch(pc) {
 async function neshanSearch(q) {
   const key = store.get('neshanKey', ''); if (!key || !navigator.onLine) return [];
   const c = FM.map.getCenter(), j = await httpJson(`https://api.neshan.org/v1/search?term=${encodeURIComponent(q)}&lat=${c.lat}&lng=${c.lng}`, { 'Api-Key': key });
-  return ((j && j.items) || []).filter((it) => it.location).slice(0, 8).map((it) => ({ type: 'place', title: it.title, sub: [it.neighbourhood, it.region, it.address].filter(Boolean).join('، '), lat: it.location.y, lng: it.location.x, tag: it.category || it.type || '' }));
+  return ((j && j.items) || []).filter((it) => it.location).slice(0, 30).map((it) => ({ type: 'place', title: it.title, sub: [it.neighbourhood, it.region, it.address].filter(Boolean).join('، '), lat: it.location.y, lng: it.location.x, tag: it.category || it.type || '' }));
 }
+const nomCache = new Map(); let nomLast = 0;
 async function nominatimSearch(q) {
   if (!navigator.onLine) return [];
-  const j = await httpJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&accept-language=fa&countrycodes=ir&limit=6&q=${encodeURIComponent(q)}`, { 'User-Agent': 'FieldMap/0.5 (Android field survey app)' }, 12000);
-  return (j || []).map((it) => ({ type: 'place', title: (it.display_name || '').split(',')[0], sub: it.display_name, lat: +it.lat, lng: +it.lon, tag: it.type }));
+  const b = FM.map.getBounds(), vb = [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].map((v) => v.toFixed(3)).join(','), key = q + '|' + vb;
+  if (nomCache.has(key)) return nomCache.get(key);
+  const w = nomLast + 1200 - Date.now(); if (w > 0) await new Promise((r) => setTimeout(r, w));
+  nomLast = Date.now();
+  const j = await httpJson(`https://nominatim.openstreetmap.org/search?format=jsonv2&accept-language=fa&countrycodes=ir&limit=20&viewbox=${vb}&q=${encodeURIComponent(q)}`, { 'User-Agent': 'FieldMap/0.5 (Android field survey app)' }, 12000);
+  const out = (j || []).map((it) => ({ type: 'place', title: (it.display_name || '').split(',')[0], sub: it.display_name, lat: +it.lat, lng: +it.lon, tag: it.type }));
+  nomCache.set(key, out); return out;
 }
 function localFeatures(q) {
   const out = [], needle = norm(q).toLowerCase(); if (needle.length < 1 || !FM.project || !FM.project.current()) return out;
@@ -148,9 +154,9 @@ async function run(q) {
   if (msg && items.length) box.appendChild(el('div', { class: 'sr-note', text: msg }));
   return items;
 }
-input.addEventListener('input', () => { btnClear.hidden = !input.value; clearTimeout(timer); timer = setTimeout(() => run(input.value), 420); });
+input.addEventListener('input', () => { btnClear.hidden = !input.value; clearTimeout(timer); timer = setTimeout(() => run(input.value), 1200); });
 input.addEventListener('focus', () => { if (!input.value) run(''); else if (box.children.length) box.hidden = false; });
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); run(input.value).then((items) => { if (items && items.length === 1) choose(items[0]); }); } if (e.key === 'Escape') closeResults(); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); if (FM.places) FM.places.onEnter(input.value); run(input.value).then((items) => { if (FM.places) FM.places.plotItems(items); if (items && items.length === 1) choose(items[0]); }); } if (e.key === 'Escape') closeResults(); });
 btnClear.addEventListener('click', () => { input.value = ''; btnClear.hidden = true; box.hidden = true; if (marker) { FM.map.removeLayer(marker); marker = null; } input.focus(); });
 FM.map.on('click', () => { if (!box.hidden) closeResults(); });
 
