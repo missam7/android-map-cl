@@ -279,19 +279,7 @@ $('#d-add-gps').addEventListener('click', () => {
   const fix = gps.last; if (!fix) { startGps(); toast('موقعیت GPS هنوز مشخص نیست؛ چند ثانیه صبر کنید.'); return; }
   if (draw.mode === 'point') savePointAt(fix.ll, { accuracy: Math.round(fix.accuracy), ...(fix.alt != null ? { z: +fix.alt.toFixed(1) } : {}) }); else addVertex(fix.ll);
 });
-  const faDigits = (s) => String(s).replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٫,]/g, '.').trim();
-$('#d-manual').addEventListener('click', async () => {
-  const mk = (ph) => el('input', { type: 'text', class: 'field', dir: 'ltr', inputmode: 'decimal', placeholder: ph });
-  const lat = mk('36.2972'), lng = mk('59.6057'), nm = el('input', { type: 'text', class: 'field', placeholder: 'نام (اختیاری)' });
-  const row = (t, n) => el('div', { class: 'frow col' }, [el('label', { text: t }), n]);
-  const body = el('div', {}, [row('عرض جغرافیایی (Lat)', lat), row('طول جغرافیایی (Lng)', lng), row('نام', nm)]);
-  const r = await dialog({ title: 'افزودن نقطه (دستی)', body, focus: false, buttons: [{ label: 'انصراف', value: false }, { label: 'افزودن', primary: true, value: true }] });
-  if (!r) return;
-  const la = parseFloat(faDigits(lat.value)), ln = parseFloat(faDigits(lng.value));
-  if (!isFinite(la) || !isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) { toast('مختصات نامعتبر است.', 4000); return; }
-  const ll = L.latLng(la, ln), f = pointFeature(ll, nm.value.trim() || FM.project.nextName('P'));
-  FM.project.addFeature(f); announcePoint(f.properties.name, ll); map.setView(ll, Math.max(map.getZoom(), 17));
-});
+  
 $('#d-undo').addEventListener('click', () => { draw.pts.pop(); redraw(); });
 $('#d-clear').addEventListener('click', () => { draw.pts = []; redraw(); });
 $('#d-end').addEventListener('click', () => { setDrawMode(null); closeSheets(); });
