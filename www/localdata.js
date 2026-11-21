@@ -58,11 +58,10 @@ function build(d, feats) {
   renderer = renderer || L.canvas({ padding: 0.3 });
   const group = L.layerGroup(), labels = L.layerGroup(), col = d.color, wt = d.weight || 2.2, fill = d.fill == null ? 0.04 : d.fill, minZ = d.labelZoom || 11;
   const gj = L.geoJSON({ type: 'FeatureCollection', features: feats }, {
-    renderer, style: () => ({ color: col, weight: wt, opacity: 0.95, fillColor: col, fillOpacity: fill }),
-    pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5, color: '#fff', weight: 1.5, fillColor: col, fillOpacity: 1 }),
+      renderer, interactive: false, style: () => ({ color: col, weight: wt, opacity: 0.95, fillColor: col, fillOpacity: fill }),
+   pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 5, interactive: false, color: '#fff', weight: 1.5, fillColor: col, fillOpacity: 1 }),
     onEachFeature(f, ly) {
-      ly.bindPopup(() => popupFor(d, f), { maxWidth: 300 });
-      if (d.labels !== false && feats.length <= 1500) {
+            if (d.labels !== false && feats.length <= 1500) {
         const nm = nameOf(d, f.properties); if (nm && ly.getBounds) { const b = ly.getBounds(); if (b.isValid()) labels.addLayer(L.marker(b.getCenter(), { interactive: false, keyboard: false, icon: L.divIcon({ className: 'ref-label', html: `<span style="color:${esc(col)}">${esc(nm)}</span>`, iconSize: [0, 0] }) })); }
       }
     }
