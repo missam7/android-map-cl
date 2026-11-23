@@ -347,7 +347,6 @@ $('#f-info').addEventListener('click', () => {
   add('ثبت نقطه', async () => { map.closePopup(); await savePointAt(c); });
   add('مبدا', () => { FM.route.setOrigin(c); map.closePopup(); }); add('مقصد', () => { FM.route.setDest(c); map.closePopup(); });
   add('پلاک / کد نوسازی', () => { map.closePopup(); FM.vec.parcelClick(c); });
-  add('هواشناسی', () => { map.closePopup(); FM.weather.show(c); });
   add('کپی', async () => { try { await navigator.clipboard.writeText(f.copy + (d.text ? '\n' + d.text : '')); toast('کپی شد.'); } catch (e) { toast('کپی انجام نشد.'); } });
    const near = el('div', { class: 'pop-desc', text: 'در حال یافتن کاربری‌های اطراف…' });
   w.appendChild(near); w.appendChild(btns);
