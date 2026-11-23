@@ -62,6 +62,7 @@ function popupFor(f, layer) {
   wrap.appendChild(el('div', { class: 'pop-title', text: p.name || '(بدون نام)' }));
   wrap.appendChild(el('div', { class: 'pop-sub', text: layer.name }));
   if (p.description) wrap.appendChild(el('div', { class: 'pop-desc', text: p.description }));
+  if (p.mediaId && FM.media) wrap.appendChild(FM.media.thumb(p.mediaId));
   const rows = [];
   let center = null;
   if (g.type === 'Point') {
@@ -77,7 +78,7 @@ function popupFor(f, layer) {
     const d = FM.geo.describe(g.coordinates[1], g.coordinates[0]);
     d.lines.forEach((ln) => { const k = ln.indexOf(': '); rows.push([ln.slice(0, k), ln.slice(k + 2)]); });
   }
-  const skip = new Set(['name', 'description', 'stroke', 'stroke-width', 'stroke-opacity', 'fill', 'fill-opacity', 'marker-color', 'marker-size', 'color', 'isText', 'textHeight', 'rotation', 'isCircle', 'radius', 'z', 'styleUrl', 'icon', 'visibility', 'symbol', 'size']);
+  const skip = new Set(['mediaId', 'mediaType', 'name', 'description', 'stroke', 'stroke-width', 'stroke-opacity', 'fill', 'fill-opacity', 'marker-color', 'marker-size', 'color', 'isText', 'textHeight', 'rotation', 'isCircle', 'radius', 'z', 'styleUrl', 'icon', 'visibility', 'symbol', 'size']);
   Object.keys(p).filter((k) => !skip.has(k) && p[k] != null && typeof p[k] !== 'object').slice(0, 14).forEach((k) => rows.push([k, String(p[k])]));
   if (rows.length) {
     const t = el('table', { class: 'pop-tbl' });
