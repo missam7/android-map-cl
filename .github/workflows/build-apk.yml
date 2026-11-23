@@ -33,6 +33,9 @@ jobs:
           s = open(p, encoding='utf-8').read()
           add = ('<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
                  '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
+                 '    <uses-permission android:name="android.permission.CAMERA"/>
+                 '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+                 '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
                  '    <uses-feature android:name="android.hardware.location.gps" />\n'
                  '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
                  '    <queries><intent><action android:name="android.speech.RecognitionService" /></intent><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>\n'
