@@ -54,7 +54,7 @@ async function fetchWeather(ll) {
 }
 async function show(ll) {
   const pop = L.popup({ maxWidth: 340 }).setLatLng(ll).setContent('در حال دریافت هواشناسی…').openOn(FM.map);
-  try { pop.setContent(render(await fetchWeather(ll), ll)); } catch (e) { pop.setContent('دریافت هواشناسی ممکن نشد: ' + e.message); }
+  try { const j = await fetchWeather(ll); pop.setContent(FM.wxchart ? FM.wxchart.build(j, ll) : render(j, ll)); } catch (e) { pop.setContent('دریافت هواشناسی ممکن نشد: ' + e.message); }
 }
 function set(v) { on = !!v; store.set('weatherOn', on); const cb = document.getElementById('opt-weather'); if (cb) cb.checked = on; if (on) toast('هواشناسی فعال شد؛ روی هر نقطه بزنید.', 3000); }
 const cb = document.getElementById('opt-weather'); if (cb) { cb.checked = on; cb.addEventListener('change', () => set(cb.checked)); }
@@ -67,5 +67,5 @@ function mountToggle() {
 }
 mountToggle();
 FM.map.on('click', (e) => { if (on && !(FM.isDrawingShape && FM.isDrawingShape())) show(e.latlng); });
-FM.weather = { on: () => on, set, show };
+FM.weather = { on: () => on, set, show, fetch: fetchWeather };
 })(window);
