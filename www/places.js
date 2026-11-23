@@ -44,11 +44,40 @@ function parse(j) {
     return lat == null ? null : { name: t['name:fa'] || t.name || '', kind: TYPE_FA[k] || k, lat, lng };
   }).filter((x) => x && x.name);
 }
-/* کاربری‌های اطراف یک نقطه */
-function around(lat, lng) {
-  const la = lat.toFixed(4), lo = lng.toFixed(4), a = `(around:80,${la},${lo})`;
-  return overpass(`[out:json][timeout:20];is_in(${la},${lo})->.a;(way(pivot.a)["name"]["leisure"];rel(pivot.a)["name"]["leisure"];way(pivot.a)["name"]["landuse"];nwr${a}["name"]["shop"];nwr${a}["name"]["amenity"];nwr${a}["name"]["tourism"];nwr${a}["name"]["office"];);out center tags 40;`).then(parse);
+/* ───── نزدیک‌ترین کاربری، از چند منبع ───── */
+const dist = (a, b, c, d) => FM.haversine({ lat: a, lng: b }, { lat: c, lng: d });
+const fmtD = (m) => (m < 1 ? 'همین‌جا' : FM.nf(Math.round(m)) + ' متر');
+async function nearOsm(lat, lng) {
+  const la = lat.toFixed(5), lo = lng.toFixed(5);
+  for (const r of [60, 200]) {
+    const a = `(around:${r},${la},${lo})`;
+    const q = `[out:json][timeout:20];is_in(${la},${lo})->.a;(way(pivot.a)["name"]["leisure"];nwr${a}["name"]["shop"];nwr${a}["name"]["amenity"];nwr${a}["name"]["tourism"];nwr${a}["name"]["office"];nwr${a}["name"]["leisure"];);out center tags 60;`;
+    const list = parse(await overpass(q)).map((p) => Object.assign(p, { d: dist(lat, lng, p.lat, p.lng) })).sort((x, y) => x.d - y.d);
+    if (list.length) return list.slice(0, 1);
+  }
+  return [];
 }
+let nomAt = 0;
+async function nearNominatim(lat, lng) {
+  const w = nomAt + 1200 - Date.now(); if (w > 0) await sleep(w); nomAt = Date.now();
+  const j = await getJson(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=fa&zoom=18&lat=${lat.toFixed(6)}&lon=${lng.toFixed(6)}`);
+  if (!j || j.error) return [];
+  const nm = j.name || ''; return nm ? [{ name: nm, kind: TYPE_FA[j.type] || j.type || '', d: dist(lat, lng, +j.lat, +j.lon) }] : [];
+}
+async function nearGoogle(lat, lng) {
+  const key = FM.store.get('googleKey', ''); if (!key) throw new Error('کلید گوگل تنظیم نشده');
+  const Http = root.Lib && root.Lib.Http; if (!Http) throw new Error('شبکه‌ی بومی در دسترس نیست');
+  const r = await Http.post({ url: 'https://places.googleapis.com/v1/places:searchNearby', headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'places.displayName,places.location,places.primaryTypeDisplayName' }, data: { maxResultCount: 3, rankPreference: 'DISTANCE', languageCode: 'fa', locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: 200 } } }, responseType: 'json', connectTimeout: 12000, readTimeout: 20000 });
+  const j = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+  if (r.status >= 400) throw new Error('HTTP ' + r.status + (j && j.error && j.error.message ? ' — ' + String(j.error.message).slice(0, 70) : ''));
+  return ((j && j.places) || []).filter((p) => p.location).map((p) => ({ name: (p.displayName && p.displayName.text) || '', kind: (p.primaryTypeDisplayName && p.primaryTypeDisplayName.text) || '', d: dist(lat, lng, p.location.latitude, p.location.longitude) })).filter((p) => p.name).sort((x, y) => x.d - y.d).slice(0, 1);
+}
+async function nearest(lat, lng) {
+  const S = [['OpenStreetMap', nearOsm], ['Nominatim', nearNominatim], ['Google Maps', nearGoogle]];
+  const res = await Promise.allSettled(S.map(([, f]) => f(lat, lng)));
+  return res.map((r, i) => ({ src: S[i][0], list: r.status === 'fulfilled' ? r.value : null, err: r.status === 'rejected' ? String((r.reason && r.reason.message) || r.reason) : '' }));
+}
+
 /* نشانگرهای موقت */
 const group = L.featureGroup(); let chip = null, fitT = null; const seen = new Set();
 function ensureUi() {
@@ -88,24 +117,48 @@ async function search(text) {
   try { addMarkers(parse(await overpass(`[out:json][timeout:25];(${fl.map((f) => `nwr${f}(${bbox()});`).join('')});out center tags 80;`))); }
   catch (e) { toast('سرور نقشه شلوغ است (' + e.message + '). چند ثانیه بعد دوباره امتحان کنید.', 6000); }
 }
-function onEnter(text) { clear(); if (filtersFor(text).length) search(text); }
 
-/* افزودن کاربری‌های اطراف + دکمه‌ی پلاک به هر پاپ‌آپ مستقل (اطلاعات، ...)؛ پاپ‌آپ نشانگرها و لایه‌ها (دارای _source) را رد می‌کند */
+/* پنجره‌ی اطلاعات ⓘ: نزدیک‌ترین کاربری + دکمه‌ی پلاک + دکمه‌ی هواشناسی */
 FM.map.on('popupopen', (e) => {
   const pop = e.popup; if (pop._source || pop._poiDone) return;
   const c = pop.getContent(); if (!(c instanceof HTMLElement)) return;
   pop._poiDone = true; const ll = pop.getLatLng();
-  const box = el('div', { class: 'pop-desc admin', text: 'در حال یافتن کاربری‌های اطراف…' }); c.appendChild(box);
+  const box = el('div', { class: 'pop-desc admin', text: 'در حال یافتن نزدیک‌ترین کاربری…' });
+  const wx = el('div', { class: 'wx-box' });
   const btns = el('div', { class: 'pop-btns' });
   if (FM.vec && FM.vec.parcelClick) btns.appendChild(el('button', { type: 'button', text: 'پلاک / کد نوسازی ملک', onclick: () => { FM.map.closePopup(); FM.vec.parcelClick(ll); } }));
-  c.appendChild(btns); pop.update();
-  around(ll.lat, ll.lng).then((list) => {
-    box.textContent = '';
-    if (!list.length) box.textContent = 'کاربری ثبت‌شده‌ای در همین نقطه یا شعاع ۸۰ متری پیدا نشد.';
-    else { box.appendChild(el('b', { text: 'کاربری‌های اطراف:' })); list.slice(0, 8).forEach((p) => box.appendChild(el('div', { text: '• ' + p.name + (p.kind ? ' (' + p.kind + ')' : '') }))); }
+  btns.appendChild(el('button', { type: 'button', text: 'وضعیت هواشناسی', onclick: async () => {
+    wx.textContent = 'در حال دریافت هواشناسی…'; pop.update();
+    try { const j = await FM.weather.fetch(ll); wx.textContent = ''; wx.appendChild(FM.wxchart.build(j, ll)); }
+    catch (er) { wx.textContent = 'دریافت هواشناسی ممکن نشد: ' + er.message; }
     pop.update();
-  }).catch((er) => { box.textContent = 'دریافت کاربری‌ها ممکن نشد (' + er.message + ').'; pop.update(); });
+  } }));
+  c.appendChild(box); c.appendChild(btns); c.appendChild(wx); pop.update();
+  nearest(ll.lat, ll.lng).then((rows) => {
+    box.textContent = ''; box.appendChild(el('b', { text: 'نزدیک‌ترین کاربری به این نقطه:' }));
+    rows.forEach((r) => {
+      const x = r.list && r.list[0];
+      const t = r.list === null ? 'خطا (' + r.err.slice(0, 60) + ')' : (x ? x.name + (x.kind ? ' (' + x.kind + ')' : '') + ' — ' + fmtD(x.d) : 'موردی نزدیک نبود');
+      box.appendChild(el('div', { text: '• ' + r.src + ': ' + t }));
+    });
+    pop.update();
+  });
 });
+
+/* Enter در کادر جستجو: همه‌ی نتایج را روی نقشه علامت می‌زند، بدون نیاز به انتخاب یکی */
 const clr = document.getElementById('sb-clear'); if (clr) clr.addEventListener('click', clear);
-FM.places = { around, search, onEnter, plotItems, clear, isCategory: (q) => filtersFor(q).length > 0 };
+const inp = document.getElementById('sb-input'); let lastSub = 0;
+async function submit(text) {
+  const q = String(text || '').trim(); if (!q || Date.now() - lastSub < 1500) return; lastSub = Date.now();
+  clear(); const rb = document.getElementById('sb-results');
+  if (filtersFor(q).length) { if (rb) rb.hidden = true; if (inp) inp.blur(); search(q); return; }
+  const items = await FM.search.run(q), pl = (items || []).filter((x) => x.type === 'place');
+  if (pl.length >= 2) { if (rb) rb.hidden = true; if (inp) inp.blur(); plotItems(pl); }
+  else if (items && items.length) FM.search.choose(items[0]);
+}
+if (inp) {
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.keyCode === 13) { e.preventDefault(); submit(inp.value); } });
+  inp.addEventListener('search', () => { if (inp.value) submit(inp.value); });
+}
+FM.places = { nearest, search, submit, plotItems, clear, isCategory: (q) => filtersFor(q).length > 0 };
 })(window);
