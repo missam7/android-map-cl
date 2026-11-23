@@ -156,7 +156,8 @@ async function run(q) {
 }
 input.addEventListener('input', () => { btnClear.hidden = !input.value; clearTimeout(timer); timer = setTimeout(() => run(input.value), 1200); });
 input.addEventListener('focus', () => { if (!input.value) run(''); else if (box.children.length) box.hidden = false; });
-input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); if (FM.places) FM.places.onEnter(input.value); run(input.value).then((items) => { if (FM.places) FM.places.plotItems(items); if (items && items.length === 1) choose(items[0]); }); } if (e.key === 'Escape') closeResults(); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeResults(); });
+{ e.preventDefault(); clearTimeout(timer); if (FM.places) FM.places.onEnter(input.value); run(input.value).then((items) => { if (FM.places) FM.places.plotItems(items); if (items && items.length === 1) choose(items[0]); }); } if (e.key === 'Escape') closeResults(); });
 btnClear.addEventListener('click', () => { input.value = ''; btnClear.hidden = true; box.hidden = true; if (marker) { FM.map.removeLayer(marker); marker = null; } input.focus(); });
 FM.map.on('click', () => { if (!box.hidden) closeResults(); });
 
