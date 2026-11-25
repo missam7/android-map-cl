@@ -18,7 +18,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(url) {
   const Http = root.Lib && root.Lib.Http;
-  if (Http) { const r = await Http.get({ url, headers: { 'User-Agent': UA }, responseType: 'json', connectTimeout: 15000, readTimeout: 30000 }); if (r.status !== 200) throw new Error('HTTP ' + r.status); return typeof r.data === 'string' ? JSON.parse(r.data) : r.data; }
+  if (Http) { const r = await Http.get({ url, headers: { 'User-Agent': UA }, responseType: 'json', connectTimeout: 6000, readTimeout: 9000 }); if (r.status !== 200) throw new Error('HTTP ' + r.status); return typeof r.data === 'string' ? JSON.parse(r.data) : r.data; }
   const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
 }
 /* صف سریالی + کش + تکرار با تأخیر (جلوی ۴۲۹ را می‌گیرد) */
@@ -37,6 +37,12 @@ function overpass(q) {
   });
   chain = job.catch(() => {}); return job;
 }
+  async function overpassFast(q) {
+  const c = cache.get(q); if (c && Date.now() - c.t < 6e5) return c.j;
+  const j = await Promise.any(MIRRORS.slice(0, 2).map((m) => getJson(m + '?data=' + encodeURIComponent(q))));
+  cache.set(q, { t: Date.now(), j }); return j;
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rj) => setTimeout(() => rj(new Error('زمان پاسخ تمام شد')), ms))]);
 function parse(j) {
   return ((j && j.elements) || []).map((e) => {
     const t = e.tags || {}, lat = e.lat != null ? e.lat : (e.center && e.center.lat), lng = e.lon != null ? e.lon : (e.center && e.center.lon);
@@ -48,14 +54,9 @@ function parse(j) {
 const dist = (a, b, c, d) => FM.haversine({ lat: a, lng: b }, { lat: c, lng: d });
 const fmtD = (m) => (m < 1 ? 'همین‌جا' : FM.nf(Math.round(m)) + ' متر');
 async function nearOsm(lat, lng) {
-  const la = lat.toFixed(5), lo = lng.toFixed(5);
-  for (const r of [60, 200]) {
-    const a = `(around:${r},${la},${lo})`;
-    const q = `[out:json][timeout:20];is_in(${la},${lo})->.a;(way(pivot.a)["name"]["leisure"];nwr${a}["name"]["shop"];nwr${a}["name"]["amenity"];nwr${a}["name"]["tourism"];nwr${a}["name"]["office"];nwr${a}["name"]["leisure"];);out center tags 60;`;
-    const list = parse(await overpass(q)).map((p) => Object.assign(p, { d: dist(lat, lng, p.lat, p.lng) })).sort((x, y) => x.d - y.d);
-    if (list.length) return list.slice(0, 1);
-  }
-  return [];
+  const la = lat.toFixed(5), lo = lng.toFixed(5), a = `(around:150,${la},${lo})`;
+  const q = `[out:json][timeout:8];(nwr${a}["name"]["shop"];nwr${a}["name"]["amenity"];nwr${a}["name"]["tourism"];nwr${a}["name"]["leisure"];nwr${a}["name"]["office"];);out center tags 30;`;
+  return parse(await overpassFast(q)).map((p) => Object.assign(p, { d: dist(lat, lng, p.lat, p.lng) })).sort((x, y) => x.d - y.d).slice(0, 1);
 }
 let nomAt = 0;
 async function nearNominatim(lat, lng) {
@@ -134,14 +135,13 @@ FM.map.on('popupopen', (e) => {
     pop.update();
   } }));
   c.appendChild(box); c.appendChild(btns); c.appendChild(wx); pop.update();
-  nearest(ll.lat, ll.lng).then((rows) => {
-    box.textContent = ''; box.appendChild(el('b', { text: 'نزدیک‌ترین کاربری به این نقطه:' }));
-    rows.forEach((r) => {
-      const x = r.list && r.list[0];
-      const t = r.list === null ? 'خطا (' + r.err.slice(0, 60) + ')' : (x ? x.name + (x.kind ? ' (' + x.kind + ')' : '') + ' — ' + fmtD(x.d) : 'موردی نزدیک نبود');
-      box.appendChild(el('div', { text: '• ' + r.src + ': ' + t }));
-    });
-    pop.update();
+  box.textContent = ''; box.appendChild(el('b', { text: 'نزدیک‌ترین کاربری به این نقطه:' }));
+  [['OpenStreetMap', nearOsm], ['Nominatim', nearNominatim], ['Google Maps', nearGoogle]].forEach(([src, fn]) => {
+    const row = el('div', { text: '• ' + src + ': در حال جستجو…' }); box.appendChild(row);
+    withTimeout(fn(ll.lat, ll.lng), 10000).then((list) => {
+      const x = list && list[0];
+      row.textContent = '• ' + src + ': ' + (x ? x.name + (x.kind ? ' (' + x.kind + ')' : '') + ' — ' + fmtD(x.d) : 'موردی نزدیک نبود');
+    }).catch((er) => { row.textContent = '• ' + src + ': خطا (' + String(er.message).slice(0, 60) + ')'; }).finally(() => pop.update());
   });
 });
 
