@@ -6,7 +6,7 @@ let dbp = null;
 const open = () => dbp || (dbp = new Promise((res, rej) => { const r = indexedDB.open('fieldmap-media', 1); r.onupgradeneeded = () => r.result.createObjectStore('m', { keyPath: 'id' }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
 const rq = (r) => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 const put = async (m) => rq((await open()).transaction('m', 'readwrite').objectStore('m').put(m));
-const get = async (id) => rq((await open()).transaction('m').objectStore('m').get(id));
+const get = async (id) => { const m = await rq((await open()).transaction('m').objectStore('m').get(id)); if (m && !m.blob && m.buf) m.blob = new Blob([m.buf], { type: m.type }); return m; };
 /* موقعیت */
 function pos() {
   return new Promise((res) => {
@@ -29,19 +29,22 @@ async function share(m) {
     const a = document.createElement('a'); a.href = URL.createObjectURL(m.blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
   }
 }
-/* نمایش داخل پاپ‌آپ نقطه (از project.js صدا زده می‌شود) */
 function thumb(id) {
-  const w = el('div', { class: 'media-box' });
-  get(id).then((m) => {
-    if (!m) { w.textContent = 'فایل رسانه روی این گوشی پیدا نشد.'; return; }
-    const u = URL.createObjectURL(m.blob), st = 'width:100%;max-height:34vh;object-fit:contain;border-radius:10px;background:#000';
-    const n = m.kind === 'photo' ? el('img', { src: u, style: st }) : el('video', { src: u, controls: '', playsinline: '', style: st });
-    n.addEventListener(m.kind === 'photo' ? 'load' : 'loadedmetadata', () => { if (FM.map._popup) FM.map._popup.update(); });
-    w.appendChild(n);
-    const b = el('button', { type: 'button', class: 'mini2', text: 'ارسال / ذخیره‌ی فایل' }); b.addEventListener('click', () => share(m)); w.appendChild(b);
-  }).catch(() => { w.textContent = 'خواندن فایل ممکن نشد.'; });
-  return w;
+  const b = el('button', { type: 'button', class: 'mini2', text: '🖼 نمایش عکس / فیلم' });
+  b.addEventListener('click', (ev) => { ev.stopPropagation(); FM.map.closePopup(); setTimeout(() => viewer(id), 150); });
+  return el('div', { class: 'media-box' }, [b]);
 }
+async function viewer(id) {
+  let m; try { m = await get(id); } catch (e) { toast('خواندن فایل ممکن نشد: ' + e.message, 6000); return; }
+  if (!m || !m.blob) { toast('فایل رسانه روی این گوشی پیدا نشد.', 5000); return; }
+  const u = URL.createObjectURL(m.blob), st = 'width:100%;max-height:55vh;object-fit:contain;border-radius:12px;background:#000';
+  const n = m.kind === 'photo' ? el('img', { src: u, style: st }) : el('video', { src: u, controls: '', playsinline: '', style: st });
+  n.addEventListener('error', () => toast('این فایل قابل نمایش نیست (ممکن است ذخیره‌ی خراب باشد).', 6000));
+  const body = el('div', {}, [n, el('div', { class: 'pop-desc', text: m.caption || '' })]);
+  const v = await dialog({ title: m.kind === 'photo' ? 'عکس' : 'فیلم', body, focus: false, buttons: [{ label: 'ارسال / ذخیره', value: 'share' }, { label: 'بستن', primary: true, value: null }] });
+  URL.revokeObjectURL(u); if (v === 'share') share(m);
+}
+
 /* پس از ثبت: مرور + توضیحات + ذخیره */
 async function review(blob, kind, p) {
   const u = URL.createObjectURL(blob), st = 'width:100%;max-height:40vh;object-fit:contain;border-radius:12px;background:#000';
@@ -52,7 +55,7 @@ async function review(blob, kind, p) {
   const r = await dialog({ title: kind === 'photo' ? 'ثبت عکس' : 'ثبت فیلم', body: el('div', {}, [prev, info, nm, ds]), focus: false, buttons: [{ label: 'دور انداختن', value: false }, { label: 'ذخیره', primary: true, value: true }] });
   URL.revokeObjectURL(u); if (!r) return;
   const id = FM.uid(), time = Date.now();
-  try { await put({ id, kind, type: blob.type, blob, time, lat: p.lat, lng: p.lng, caption: ds.value.trim() }); } catch (e) { toast('ذخیره‌ی فایل روی گوشی ممکن نشد: ' + e.message, 6000); return; }
+  try { await put({ id, kind, type: blob.type, buf: await blob.arrayBuffer(), time, lat: p.lat, lng: p.lng, caption: ds.value.trim() }); } catch (e) { toast('ذخیره‌ی فایل روی گوشی ممکن نشد: ' + e.message, 6000); return; }
   const props = { name: nm.value.trim() || FM.project.nextName(kind === 'photo' ? 'IMG' : 'VID'), mediaId: id, mediaType: kind, symbol: 'pin', 'marker-color': kind === 'photo' ? '#1f77b4' : '#d62728', time: new Date(time).toLocaleString('fa-IR') };
   if (ds.value.trim()) props.description = ds.value.trim();
   FM.project.addFeature({ type: 'Feature', properties: props, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } });
@@ -113,5 +116,5 @@ function mount() {
   sh.appendChild(el('div', { class: 'sec' }, [el('h3', { text: 'عکس و فیلم میدانی' }), b, el('p', { class: 'hint', text: 'عکس یا فیلم با موقعیت لحظه‌ی ثبت، روی نقشه نقطه می‌شود و توضیحات شما همراهش ذخیره می‌شود.' })]));
 }
 mount(); window.addEventListener('load', mount);
-FM.media = { open: openCamera, thumb, get };
+FM.media = { open: openCamera, thumb, viewer, get };
 })(window);
